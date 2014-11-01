@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Adapted from openshift-go-cart.
+
+STOPTIMEOUT=10
+FMT="%a %b %d %Y %H:%M:%S GMT%z (%Z)"
+
+function is_ocaml_service_running() {
+	exec_name=$OPENSHIFT_APP_NAME
+	if [ -f $OPENSHIFT_OCAML_DIR/pid/ocaml.pid ]; then
+		ocaml_pid=$( cat $OPENSHIFT_OCAML_DIR/pid/ocaml.pid 2> /dev/null )
+		if [ `ps --no-heading --pid $ocaml_pid | wc -l` -gt 0 ] ; then
+			return 0
+		fi
+	fi
+
+	return 1
+}
+
+function status() {
+	if [ is_ocaml_service_running ]; then
+		client_result "Application is running"
+	else
+		client_result "Application is not running"
+	fi
+}
+
+function start() {
+	logf="${OPENSHIFT_LOG_DIR}/ocaml.log"
+
+	if is_ocaml_service_running; then
+		echo "`date +"$FMT"`: Application '$OPENSHIFT_APP_NAME' is already running; skipping start()"
+		return 0
+	fi
+
+	exe=$OPENSHIFT_APP_NAME
+	export PATH=$OPENSHIFT_REPO_DIR:$PATH
+	pushd "$OPENSHIFT_REPO_DIR" > /dev/null
+	{
+
+		if [ -f "$exe" ]; then
+			echo "`date +"$FMT"`: Starting application '$OPENSHIFT_APP_NAME' from $exe..."
+
+			nohup "$exe" >> $logf 2>&1 &
+
+			ret=$?
+			npid=$!
+			if [ $ret -eq 0 ]; then
+				echo "$npid" > "$OPENSHIFT_OCAML_DIR/pid/ocaml.pid"
+			else
+				echo "Application '$OPENSHIFT_APP_NAME' failed to start - $ret" 1>&2
+				exit $ret
+			fi
+		else
+			echo "WARN: Could not find the compiled application $exe, will not start"
+		fi
+	} >> $logf
+}
+
+function stop() {
+	if [ -f $OPENSHIFT_OCAML_DIR/pid/ocaml.pid ]; then
+		ocaml_pid=$( cat $OPENSHIFT_OCAML_DIR/pid/ocaml.pid 2> /dev/null )
+	fi
+
+	if [ -n "$ocaml_pid" ]; then
+		logf="${OPENSHIFT_LOG_DIR}/ocaml.log"
+		echo "`date +"$FMT"`: Stopping application '$OPENSHIFT_APP_NAME' ..." >> $logf
+		/bin/kill $ocaml_pid
+		ret=$?
+		if [ $ret -ne 0 ]; then
+			TIMEOUT="$STOPTIMEOUT"
+			while [ $TIMEOUT -gt 0 ] && is_ocaml_service_running ; do
+				/bin/kill -0 "$ocaml_pid" >/dev/null 2>&1 || break
+				sleep 1
+				let TIMEOUT=${TIMEOUT}-1
+			done
+		fi
+
+		echo "`date +"$FMT"`: Stopped Ocaml application '$OPENSHIFT_APP_NAME'" >> $logf
+		rm -f $OPENSHIFT_OCAML_DIR/pid/ocaml.pid
+	else
+		echo "Warning: Application '$OPENSHIFT_APP_NAME' server exists without a pid file.  Use force-stop to kill." 1>&2
+	fi
+}
+
+function restart() {
+    stop
+    start
+}
+
+function build() {
+	${OPENSHIFT_OCAML_DIR}/bin/compile
+}
+
+function tidy() {
+	echo
+}
+
+# Ensure arguments.
+if ! [ $# -eq 1 ]; then
+    echo "Usage: $0 [start|restart|stop|status|build]"
+    exit 1
+fi
+
+# Handle commands.
+case "$1" in
+    start)            start          ;;
+    restart)          restart        ;;
+    stop)             stop           ;;
+    status)           status         ;;
+    build)            build          ;;
+    tidy)             tidy           ;;
+    *)                exit 0         ;;
+esac
+

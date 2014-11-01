@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+# bin/compile
+
+set -eo pipefail
+
+
+root=${OPENSHIFT_OCAML_DIR}build
+mkdir -p $root
+
+# ocaml version
+ver=${OCAMLVERSION:-4.02.1}
+
+# opam_installer.sh
+url=https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh
+
+if [ -f $root/bin ]; then
+	rm $root/bin
+fi
+mkdir -p $root/bin
+
+# fetch aspcud solver.
+if ! [ -f $root/bin/aspcud ]; then
+	wget http://sourceforge.net/projects/potassco/files/aspcud/1.9.0/aspcud-1.9.0-x86_64-linux.tar.gz/download -O - | tar zxf - && cp aspcud-1.9.0-x86_64-linux/aspcud $root/bin && rm -rf aspcud-1.9.0-x86_64-linux
+fi
+
+export PATH=$root/bin:$PATH
+
+export OPAMROOT=$root/.opam
+
+installer=$root/$(basename $url)
+if ! [ -f $installer -a -f $root/bin/opam ]; then
+	wget $url -O $installer && chmod +x $installer && $installer $root/bin $ver
+else
+	echo "Using opam" $(opam --version)
+fi
+
+# install some native packages.(c bindings). (Could be extended).
+URLS=( "https://www.openssl.org/source/openssl-1.0.1j.tar.gz" "http://zlib.net/zlib-1.2.8.tar.gz" "http://www.sqlite.org/2014/sqlite-autoconf-3080701.tar.gz" "http://sourceforge.net/projects/pcre/files/pcre/8.36/pcre-8.36.tar.gz" )
+for url in "${URLS[@]}"; do
+	wget $url -O - | tar zx -C ${OPENSHIFT_TMP_DIR}
+	pkgdir=${OPENSHIFT_TMP_DIR}/$(basename $url .tar.gz)
+	pushd $pkgdir && (./configure --prefix=$root || ./config --prefix=$root) && make install -j4 && popd && rm -rf $pkgdir
+done
+
+# add pkg-config path.
+export PKG_CONFIG_PATH=$root/lib/pkgconfig
+
+if ! [ -f $OPAMROOT/$ver/bin/ocaml ]; then
+	opam switch $ver
+	# initialize opam.
+	opam init -n
+	# setup opam env.
+	eval $(opam config env)
+	#update package list
+	opam update
+	# install eliom (not necessary but default framework)
+	# opam install eliom
+fi
