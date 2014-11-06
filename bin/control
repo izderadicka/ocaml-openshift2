@@ -35,6 +35,7 @@ function restart() {
 function tidy() {
 	client_message "Deleting ocaml log"
 	rm -rf $logfile
+	run_hook tidy
 }
 
 function build() {

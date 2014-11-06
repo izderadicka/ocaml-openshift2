@@ -28,3 +28,6 @@ if ! [ -d ${OPAMROOT}/$ver ]; then
 	opam switch $ver
 	client_result "Compiler Ready."
 fi
+
+mkdir ${OPENSHIFT_DEPENDENCIES_DIR}/$ver
+cp -r ${OPAMROOT}/$ver/lib ${OPENSHIFT_DEPENDENCIES_DIR}/$ver
