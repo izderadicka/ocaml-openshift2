@@ -25,4 +25,4 @@ Endpoints:
       - Frontend:      ""
         Backend:       ""
         Options:       { websocket: true }
-Source-Url: http://code.fssrv.net/ocaml-openshift.git
+Source-Url: git@github.com:izderadicka/ocaml-openshift2.git
