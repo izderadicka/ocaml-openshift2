@@ -25,4 +25,4 @@ Endpoints:
       - Frontend:      ""
         Backend:       ""
         Options:       { websocket: true }
-Source-Url: git@github.com:izderadicka/ocaml-openshift2.git
+Source-Url: https://github.com/izderadicka/ocaml-openshift2.git
